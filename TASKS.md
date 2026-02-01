@@ -25,9 +25,13 @@
   - [x] Institutional Decay and Renewal (governance)
 - [x] Improved keyword search (tokenization, stopwords)
 - [x] Better API key handling with multiple sources
+- [x] **34 patterns written** (2026-01-31)
+  - [x] Health: mental-health-evolution, addiction-waves, germ-theory-resistance, public-health-infrastructure
+  - [x] Existential: nuclear-fear-cycles, y2k-and-tech-catastrophism
+  - [x] Governance: revolutionary-waves, decolonization-waves
+- [x] Deployed to Railway (https://chronicle-production-433c.up.railway.app)
 
 ### In Progress 🔄
-- [ ] Test synthesis end-to-end (needs API key)
 - [ ] Set up embedding pipeline for semantic search
 
 ### Just Added ✅
@@ -44,30 +48,44 @@
 
 ## Next Sprint: Pattern Library (Week 2)
 
-### Patterns to Write
+### Patterns to Write (remaining gaps)
 - [ ] **Technology**
+  - [x] Computing Revolution ✅
+  - [x] AI Winter(s) ✅
   - [ ] Electrification (1880-1940)
-  - [ ] Computing Revolution (1950-1990)
-  - [ ] Internet Emergence (1990-2010)
-  - [ ] Automation Anxiety 1960s
-  - [ ] AI Winter(s)
+  - [ ] Automation Anxiety 1960s vs today
   
 - [ ] **Economics**
-  - [ ] Tulip Mania
-  - [ ] South Sea Bubble
-  - [ ] Great Depression
-  - [ ] 2008 Financial Crisis
-  - [ ] Dot-com Bubble
+  - [x] Speculative Manias (covers Tulip, South Sea, Dot-com, etc.) ✅
+  - [x] Great Depression recovery ✅
+  - [x] Financial Crises ✅
+  - [ ] Currency crises / hyperinflation
   
 - [ ] **Governance**
-  - [ ] Fall of Rome patterns
-  - [ ] Democracy waves
-  - [ ] Institutional decay
+  - [x] Fall of Rome patterns ✅
+  - [x] Democracy waves ✅
+  - [x] Institutional decay ✅
+  - [x] Revolutionary waves ✅
+  - [x] Decolonization ✅
   
 - [ ] **Social**
-  - [ ] Scientific Revolution
+  - [x] Scientific Revolution ✅
   - [ ] Enlightenment
-  - [ ] 1960s social change
+  - [ ] Labor movements
+  - [ ] Civil rights waves
+  
+- [ ] **Health**
+  - [x] Mental health evolution ✅
+  - [x] Addiction waves ✅
+  - [x] Germ theory resistance ✅
+  - [x] Public health infrastructure ✅
+  - [ ] Obesity/metabolic syndrome parallels
+  
+- [ ] **Existential**
+  - [x] Nuclear fear cycles ✅
+  - [x] Y2K and tech catastrophism ✅
+  - [ ] Asteroid/comet fears
+  - [ ] Population bomb predictions
 
 ### Infrastructure
 - [ ] Set up embedding pipeline (OpenAI or local)

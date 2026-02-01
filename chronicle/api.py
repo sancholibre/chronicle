@@ -3,14 +3,16 @@ Chronicle HTTP API - Simple REST endpoint for agents and applications.
 """
 
 import os
+import markdown
 from typing import Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from .patterns import library
 from .synthesis import SynthesisEngine, Perspective
+from . import templates
 
 
 # --- Models ---
@@ -233,6 +235,79 @@ async def landing():
 </body>
 </html>
 """
+
+
+@app.get("/app", response_class=HTMLResponse)
+async def app_page():
+    """Main interactive UI for asking questions."""
+    library.load()
+    
+    domains = {}
+    for pattern in library.all():
+        domains[pattern.domain] = domains.get(pattern.domain, 0) + 1
+    
+    return templates.app_page(
+        pattern_count=len(library.patterns),
+        domains=domains,
+    )
+
+
+@app.get("/browse", response_class=HTMLResponse)
+async def browse_page(domain: Optional[str] = Query(None)):
+    """Browse all patterns with optional domain filter."""
+    library.load()
+    
+    domains = {}
+    for pattern in library.all():
+        domains[pattern.domain] = domains.get(pattern.domain, 0) + 1
+    
+    if domain:
+        patterns = library.by_domain(domain)
+    else:
+        patterns = library.all()
+    
+    pattern_list = [
+        {
+            "id": p.id,
+            "title": p.title,
+            "domain": p.domain,
+            "era": p.era,
+        }
+        for p in patterns
+    ]
+    
+    return templates.browse_page(
+        patterns=pattern_list,
+        domains=domains,
+        current_domain=domain,
+    )
+
+
+@app.get("/browse/{pattern_id}", response_class=HTMLResponse)
+async def pattern_page(pattern_id: str):
+    """View a single pattern in detail."""
+    pattern = library.get(pattern_id)
+    
+    if not pattern:
+        raise HTTPException(status_code=404, detail=f"Pattern '{pattern_id}' not found")
+    
+    # Convert markdown content to HTML
+    content_html = markdown.markdown(
+        pattern.content,
+        extensions=['tables', 'fenced_code'],
+    )
+    
+    return templates.pattern_detail_page(
+        pattern={
+            "id": pattern.id,
+            "title": pattern.title,
+            "domain": pattern.domain,
+            "era": pattern.era,
+            "time_scale": pattern.time_scale,
+            "confidence": pattern.confidence,
+        },
+        content_html=content_html,
+    )
 
 
 @app.get("/health", response_model=HealthResponse)
