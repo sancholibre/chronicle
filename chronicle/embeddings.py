@@ -217,64 +217,134 @@ def semantic_search(query: str, limit: int = 5, db_path: Path = VECTORS_DB) -> l
     ]
 
 
+def embed_text_openai(text: str, api_key: str) -> list[float]:
+    """Generate embedding using OpenAI API."""
+    import openai
+    
+    client = openai.OpenAI(api_key=api_key)
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=text[:8000],
+    )
+    return response.data[0].embedding
+
+
+def semantic_search_api(
+    query: str, 
+    api_key: Optional[str] = None,
+    limit: int = 5, 
+    db_path: Path = VECTORS_DB
+) -> list[dict]:
+    """
+    Semantic search using OpenAI embeddings for the query.
+    Falls back to keyword search if no API key or vectors.db unavailable.
+    """
+    # Check for API key
+    api_key = api_key or os.environ.get("OPENAI_API_KEY")
+    
+    if not api_key or not db_path.exists():
+        # Fall back to keyword search
+        return search_keyword(query, limit, db_path)
+    
+    try:
+        # Get query embedding from OpenAI
+        query_embedding = embed_text_openai(query, api_key)
+        
+        # Note: OpenAI text-embedding-3-small outputs 1536 dims by default
+        # Our local embeddings are 768 dims, so we need to handle this
+        # For now, fall back to keyword if dimensions don't match
+        if len(query_embedding) != 768:
+            # Try with dimension reduction parameter
+            import openai
+            client = openai.OpenAI(api_key=api_key)
+            response = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=query[:8000],
+                dimensions=768,  # Request specific dimensions
+            )
+            query_embedding = response.data[0].embedding
+        
+        db = sqlite3.connect(str(db_path))
+        db.enable_load_extension(True)
+        sqlite_vec.load(db)
+        db.enable_load_extension(False)
+        
+        # Vector similarity search
+        results = db.execute("""
+            SELECT 
+                p.id,
+                p.title,
+                p.domain,
+                p.summary,
+                vec_distance_cosine(v.embedding, ?) as distance
+            FROM pattern_vectors v
+            JOIN patterns p ON v.id = p.id
+            ORDER BY distance ASC
+            LIMIT ?
+        """, (serialize_embedding(query_embedding), limit)).fetchall()
+        
+        db.close()
+        
+        return [
+            {
+                "id": r[0],
+                "title": r[1],
+                "domain": r[2],
+                "summary": r[3],
+                "similarity": 1 - r[4],
+            }
+            for r in results
+        ]
+        
+    except Exception as e:
+        # Fall back to keyword search on any error
+        print(f"Semantic search failed, falling back to keyword: {e}")
+        return search_keyword(query, limit, db_path)
+
+
+def search_keyword(query: str, limit: int = 5, db_path: Path = VECTORS_DB) -> list[dict]:
+    """Keyword-based search fallback."""
+    if db_path.exists():
+        db = sqlite3.connect(str(db_path))
+        results = db.execute("""
+            SELECT id, title, domain, summary
+            FROM patterns
+            WHERE title LIKE ? OR summary LIKE ? OR domain LIKE ?
+            LIMIT ?
+        """, (f"%{query}%", f"%{query}%", f"%{query}%", limit)).fetchall()
+        db.close()
+        
+        if results:
+            return [
+                {
+                    "id": r[0],
+                    "title": r[1],
+                    "domain": r[2],
+                    "summary": r[3],
+                    "similarity": 0.5,  # Keyword match placeholder
+                }
+                for r in results
+            ]
+    
+    # Fall back to library search
+    library.load()
+    results = library.search_simple(query)[:limit]
+    return [
+        {
+            "id": p.id,
+            "title": p.title,
+            "domain": p.domain,
+            "summary": p.summary,
+            "similarity": 0.5,
+        }
+        for p in results
+    ]
+
+
 def search_without_model(query: str, limit: int = 5, db_path: Path = VECTORS_DB) -> list[dict]:
     """
     Search using pre-computed query embedding (for deployment without local model).
     Falls back to keyword search if no embedding available.
     """
-    if not db_path.exists():
-        # Fall back to keyword search
-        library.load()
-        results = library.search_simple(query)[:limit]
-        return [
-            {
-                "id": p.id,
-                "title": p.title,
-                "domain": p.domain,
-                "summary": p.summary,
-                "similarity": 0.5,  # Placeholder score for keyword matches
-            }
-            for p in results
-        ]
-    
-    # For now, just do keyword search on the patterns table
-    # In production, we'd need to either:
-    # 1. Call an embedding API
-    # 2. Pre-compute common query embeddings
-    # 3. Use a smaller model bundled with the app
-    db = sqlite3.connect(str(db_path))
-    
-    results = db.execute("""
-        SELECT id, title, domain, summary
-        FROM patterns
-        WHERE title LIKE ? OR summary LIKE ? OR domain LIKE ?
-        LIMIT ?
-    """, (f"%{query}%", f"%{query}%", f"%{query}%", limit)).fetchall()
-    
-    db.close()
-    
-    if not results:
-        # Fall back to library search
-        library.load()
-        results = library.search_simple(query)[:limit]
-        return [
-            {
-                "id": p.id,
-                "title": p.title,
-                "domain": p.domain,
-                "summary": p.summary,
-                "similarity": 0.5,
-            }
-            for p in results
-        ]
-    
-    return [
-        {
-            "id": r[0],
-            "title": r[1],
-            "domain": r[2],
-            "summary": r[3],
-            "similarity": 0.7,  # Placeholder
-        }
-        for r in results
-    ]
+    # Try semantic search with OpenAI first
+    return semantic_search_api(query, limit=limit, db_path=db_path)

@@ -303,6 +303,55 @@ async def search_patterns(q: str):
     ]
 
 
+class SemanticSearchRequest(BaseModel):
+    """Request for semantic search."""
+    query: str
+    limit: int = 5
+    api_key: Optional[str] = None  # OpenAI API key for embedding
+
+
+class SemanticSearchResult(BaseModel):
+    """Semantic search result with similarity score."""
+    id: str
+    title: str
+    domain: str
+    summary: str
+    similarity: float
+
+
+@app.post("/semantic-search", response_model=list[SemanticSearchResult])
+async def semantic_search(request: SemanticSearchRequest):
+    """
+    Search patterns by semantic similarity.
+    
+    Uses OpenAI embeddings to find patterns semantically related to your query,
+    even if they don't contain the exact keywords.
+    
+    Requires OpenAI API key - either set OPENAI_API_KEY environment variable,
+    or pass api_key in the request body (BYOK).
+    
+    Falls back to keyword search if no API key provided.
+    """
+    from .embeddings import semantic_search_api
+    
+    results = semantic_search_api(
+        query=request.query,
+        api_key=request.api_key,
+        limit=request.limit,
+    )
+    
+    return [
+        SemanticSearchResult(
+            id=r["id"],
+            title=r["title"],
+            domain=r["domain"],
+            summary=r["summary"],
+            similarity=r["similarity"],
+        )
+        for r in results
+    ]
+
+
 @app.get("/domains")
 async def list_domains():
     """List available domains with pattern counts."""
