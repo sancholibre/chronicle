@@ -37,10 +37,12 @@ ENV/
 Thumbs.db
 
 # Project specific
-*.db
 *.sqlite
 .env
 .env.local
+
+# Except vectors.db which ships with the app
+!vectors.db
 
 # Railway
 railway.json

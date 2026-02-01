@@ -165,5 +165,54 @@ def serve(host: str, port: int):
     run(host=host, port=port)
 
 
+@main.command()
+@click.option("--force", "-f", is_flag=True, help="Re-embed all patterns even if unchanged")
+def embed(force: bool):
+    """Generate vector embeddings for all patterns."""
+    from .embeddings import index_patterns
+    
+    console.print("[bold blue]Generating embeddings for patterns...[/bold blue]")
+    console.print()
+    
+    try:
+        stats = index_patterns(force=force)
+        console.print()
+        console.print(f"[green]✓ Indexed: {stats['indexed']}[/green]")
+        console.print(f"[yellow]○ Skipped: {stats['skipped']}[/yellow]")
+        if stats['errors']:
+            console.print(f"[red]✗ Errors: {stats['errors']}[/red]")
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        console.print("[dim]Install llama.cpp: brew install llama.cpp[/dim]")
+
+
+@main.command()
+@click.argument("query")
+@click.option("--limit", "-n", default=5, help="Number of results")
+def vsearch(query: str, limit: int):
+    """Semantic search patterns by meaning (requires embeddings)."""
+    from .embeddings import semantic_search
+    
+    try:
+        results = semantic_search(query, limit=limit)
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        return
+    
+    if not results:
+        console.print(f"[yellow]No patterns found for '{query}'[/yellow]")
+        return
+    
+    console.print(f"[bold]Semantic matches for '{query}':[/bold]")
+    console.print()
+    
+    for r in results:
+        sim_pct = int(r['similarity'] * 100)
+        console.print(f"  [cyan]{r['id']}[/cyan] ({sim_pct}% match)")
+        console.print(f"    {r['title']}")
+        console.print(f"    [dim]{r['summary'][:100]}...[/dim]")
+        console.print()
+
+
 if __name__ == "__main__":
     main()
