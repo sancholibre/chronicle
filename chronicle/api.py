@@ -223,7 +223,7 @@ async def landing():
         <div class="links">
             <a href="/docs">Interactive API Docs</a>
             <a href="/patterns" class="secondary">Browse Patterns</a>
-            <a href="https://github.com/WillieMammworthy/chronicle" class="secondary">GitHub</a>
+            <a href="https://github.com/sancholibre/chronicle" class="secondary">GitHub</a>
         </div>
         
         <p class="footer">
