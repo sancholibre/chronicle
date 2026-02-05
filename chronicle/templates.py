@@ -428,6 +428,7 @@ def app_page(pattern_count: int, domains: dict) -> str:
             <a href="/" class="logo">Chronicle</a>
             <nav>
                 <a href="/app" class="active">Ask</a>
+                <a href="/chat">Chat</a>
                 <a href="/browse">Browse Patterns</a>
                 <a href="/docs">API</a>
             </nav>
@@ -637,6 +638,7 @@ def browse_page(patterns: list, domains: dict, current_domain: str = None) -> st
             <a href="/" class="logo">Chronicle</a>
             <nav>
                 <a href="/app">Ask</a>
+                <a href="/chat">Chat</a>
                 <a href="/browse" class="active">Browse Patterns</a>
                 <a href="/docs">API</a>
             </nav>
@@ -688,6 +690,7 @@ def pattern_detail_page(pattern: dict, content_html: str) -> str:
             <a href="/" class="logo">Chronicle</a>
             <nav>
                 <a href="/app">Ask</a>
+                <a href="/chat">Chat</a>
                 <a href="/browse" class="active">Browse Patterns</a>
                 <a href="/docs">API</a>
             </nav>
@@ -716,6 +719,348 @@ def pattern_detail_page(pattern: dict, content_html: str) -> str:
             <p>Built by <a href="https://deaconsantiago.com/willie">Willie 🦣</a></p>
         </footer>
     </div>
+</body>
+</html>
+"""
+
+
+def chat_page(pattern_count: int) -> str:
+    """Chat UI for multi-turn conversations."""
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronicle - Conversation</title>
+    <style>
+        {BASE_STYLES}
+        
+        .chat-container {{
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 200px);
+            max-height: 700px;
+        }}
+        
+        .messages {{
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }}
+        
+        .message {{
+            max-width: 85%;
+            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            line-height: 1.6;
+        }}
+        
+        .message.user {{
+            align-self: flex-end;
+            background: var(--accent);
+            color: var(--bg-primary);
+        }}
+        
+        .message.assistant {{
+            align-self: flex-start;
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+        }}
+        
+        .message.assistant .content {{
+            white-space: pre-wrap;
+        }}
+        
+        .message.assistant .patterns {{
+            margin-top: 1rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }}
+        
+        .message.assistant .patterns a {{
+            color: var(--accent);
+            text-decoration: none;
+        }}
+        
+        .message.assistant .patterns a:hover {{
+            text-decoration: underline;
+        }}
+        
+        .message.system {{
+            align-self: center;
+            background: transparent;
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 0.9rem;
+            padding: 0.5rem;
+        }}
+        
+        .input-area {{
+            display: flex;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 0 0 12px 12px;
+            border-top: 1px solid var(--border);
+        }}
+        
+        .input-area input {{
+            flex: 1;
+            padding: 0.875rem 1rem;
+            font-size: 1rem;
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+        }}
+        
+        .input-area input:focus {{
+            outline: none;
+            border-color: var(--accent);
+        }}
+        
+        .input-area input::placeholder {{
+            color: var(--text-muted);
+        }}
+        
+        .input-area button {{
+            padding: 0.875rem 1.5rem;
+        }}
+        
+        .typing-indicator {{
+            display: flex;
+            gap: 4px;
+            padding: 1rem 1.25rem;
+            background: var(--bg-card);
+            border-radius: 12px;
+            width: fit-content;
+        }}
+        
+        .typing-indicator span {{
+            width: 8px;
+            height: 8px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            animation: bounce 1.4s ease-in-out infinite;
+        }}
+        
+        .typing-indicator span:nth-child(2) {{ animation-delay: 0.2s; }}
+        .typing-indicator span:nth-child(3) {{ animation-delay: 0.4s; }}
+        
+        @keyframes bounce {{
+            0%, 60%, 100% {{ transform: translateY(0); }}
+            30% {{ transform: translateY(-6px); }}
+        }}
+        
+        .session-controls {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }}
+        
+        .session-info {{
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }}
+        
+        .new-chat-btn {{
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }}
+        
+        /* API key toggle */
+        .api-toggle {{
+            margin-bottom: 1rem;
+        }}
+        
+        .api-toggle summary {{
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }}
+        
+        .api-toggle input {{
+            margin-top: 0.5rem;
+            width: 100%;
+            max-width: 400px;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: monospace;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="logo">Chronicle</a>
+            <nav>
+                <a href="/app">Quick Ask</a>
+                <a href="/chat" class="active">Chat</a>
+                <a href="/browse">Browse Patterns</a>
+                <a href="/docs">API</a>
+            </nav>
+        </header>
+        
+        <div class="session-controls">
+            <span class="session-info" id="sessionInfo">Starting new conversation...</span>
+            <button class="btn btn-secondary new-chat-btn" onclick="startNewChat()">New Conversation</button>
+        </div>
+        
+        <details class="api-toggle">
+            <summary>🔑 API Key (optional)</summary>
+            <input type="password" id="apiKey" placeholder="sk-ant-... (Anthropic API key)">
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">
+                Required for responses. Your key is sent directly to Anthropic, not stored.
+            </p>
+        </details>
+        
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="message system">
+                    Ask me about any situation you're facing, and I'll find historical parallels.
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <input 
+                    type="text" 
+                    id="userInput" 
+                    placeholder="What's on your mind?"
+                    onkeypress="if(event.key === 'Enter') sendMessage()"
+                    autofocus
+                >
+                <button class="btn" onclick="sendMessage()" id="sendBtn">Send</button>
+            </div>
+        </div>
+        
+        <footer>
+            <p>
+                {pattern_count} historical patterns · 
+                Built by <a href="https://deaconsantiago.com/willie">Willie 🦣</a>
+            </p>
+        </footer>
+    </div>
+    
+    <script>
+        let sessionId = null;
+        
+        // Start a conversation on page load
+        startNewChat();
+        
+        async function startNewChat() {{
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = '<div class="message system">Starting new conversation...</div>';
+            
+            try {{
+                const res = await fetch('/conversation/start', {{ method: 'POST' }});
+                const data = await res.json();
+                sessionId = data.session_id;
+                
+                document.getElementById('sessionInfo').textContent = `Session: ${{sessionId}}`;
+                messagesDiv.innerHTML = `<div class="message system">${{data.message}}</div>`;
+                document.getElementById('userInput').focus();
+                
+            }} catch (err) {{
+                messagesDiv.innerHTML = `<div class="message system" style="color: #e74c3c;">Failed to start conversation: ${{err.message}}</div>`;
+            }}
+        }}
+        
+        async function sendMessage() {{
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
+            
+            if (!message || !sessionId) return;
+            
+            const messagesDiv = document.getElementById('messages');
+            const sendBtn = document.getElementById('sendBtn');
+            
+            // Add user message
+            messagesDiv.innerHTML += `<div class="message user">${{escapeHtml(message)}}</div>`;
+            input.value = '';
+            input.disabled = true;
+            sendBtn.disabled = true;
+            
+            // Add typing indicator
+            messagesDiv.innerHTML += `<div class="typing-indicator" id="typing"><span></span><span></span><span></span></div>`;
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            try {{
+                const res = await fetch(`/conversation/${{sessionId}}`, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        message: message,
+                        api_key: apiKey || undefined,
+                        max_patterns: 5
+                    }})
+                }});
+                
+                // Remove typing indicator
+                document.getElementById('typing')?.remove();
+                
+                if (!res.ok) {{
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Failed to send message');
+                }}
+                
+                const data = await res.json();
+                
+                // Build assistant message
+                let patternsHtml = '';
+                if (data.patterns_used && data.patterns_used.length > 0) {{
+                    const patternLinks = data.patterns_used.map(p => 
+                        `<a href="/browse/${{p.id}}">${{p.title}}</a>`
+                    ).join(' · ');
+                    patternsHtml = `<div class="patterns">Patterns: ${{patternLinks}}</div>`;
+                }}
+                
+                messagesDiv.innerHTML += `
+                    <div class="message assistant">
+                        <div class="content">${{formatResponse(data.response)}}</div>
+                        ${{patternsHtml}}
+                    </div>
+                `;
+                
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                
+            }} catch (err) {{
+                document.getElementById('typing')?.remove();
+                messagesDiv.innerHTML += `<div class="message system" style="color: #e74c3c;">Error: ${{err.message}}</div>`;
+            }}
+            
+            input.disabled = false;
+            sendBtn.disabled = false;
+            input.focus();
+        }}
+        
+        function escapeHtml(text) {{
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }}
+        
+        function formatResponse(text) {{
+            // Convert markdown-style headers and formatting
+            return text
+                .replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')
+                .replace(/\\n/g, '<br>');
+        }}
+    </script>
 </body>
 </html>
 """

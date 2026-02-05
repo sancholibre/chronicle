@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from .patterns import library
 from .synthesis import SynthesisEngine, Perspective
+from .conversations import ConversationEngine, conversation_engine
 from . import templates
 
 
@@ -480,6 +481,132 @@ async def get_perspective(request: PerspectiveRequest):
             for p in result.patterns_used
         ],
     )
+
+
+# --- Conversation Models ---
+
+class ConversationStartResponse(BaseModel):
+    """Response when starting a new conversation."""
+    session_id: str
+    message: str
+
+
+class ConversationMessageRequest(BaseModel):
+    """Request to send a message in a conversation."""
+    message: str
+    max_patterns: int = 5
+    api_key: Optional[str] = None
+
+
+class ConversationMessage(BaseModel):
+    """A message in a conversation."""
+    role: str
+    content: str
+    patterns_used: list[str] = []
+    timestamp: str
+
+
+class ConversationResponse(BaseModel):
+    """Response from a conversation message."""
+    session_id: str
+    response: str
+    patterns_used: list[PatternSummary]
+    message_count: int
+
+
+class ConversationHistoryResponse(BaseModel):
+    """Full conversation history."""
+    session_id: str
+    messages: list[ConversationMessage]
+    created_at: str
+
+
+# --- Conversation Endpoints ---
+
+@app.post("/conversation/start", response_model=ConversationStartResponse)
+async def start_conversation():
+    """
+    Start a new conversation session.
+    
+    Returns a session_id to use for subsequent messages.
+    Conversations expire after 24 hours of inactivity.
+    """
+    conv = conversation_engine.start_conversation()
+    return ConversationStartResponse(
+        session_id=conv.session_id,
+        message="Conversation started. Ask me about any situation you're facing, and I'll find historical parallels.",
+    )
+
+
+@app.post("/conversation/{session_id}", response_model=ConversationResponse)
+async def send_conversation_message(session_id: str, request: ConversationMessageRequest):
+    """
+    Send a message in an existing conversation.
+    
+    The conversation maintains context from previous exchanges,
+    allowing for follow-up questions and deeper exploration.
+    """
+    try:
+        conv, response_text = conversation_engine.send_message(
+            session_id=session_id,
+            user_message=request.message,
+            max_patterns=request.max_patterns,
+            api_key=request.api_key,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # Get patterns used in this response
+    last_message = conv.messages[-1]
+    patterns_used = []
+    for pid in last_message.patterns_used:
+        pattern = library.get(pid)
+        if pattern:
+            patterns_used.append(PatternSummary(
+                id=pattern.id,
+                title=pattern.title,
+                domain=pattern.domain,
+                era=pattern.era,
+            ))
+    
+    return ConversationResponse(
+        session_id=conv.session_id,
+        response=response_text,
+        patterns_used=patterns_used,
+        message_count=len(conv.messages),
+    )
+
+
+@app.get("/conversation/{session_id}", response_model=ConversationHistoryResponse)
+async def get_conversation_history(session_id: str):
+    """Get the full history of a conversation."""
+    conv = conversation_engine.get_conversation(session_id)
+    
+    if not conv:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    
+    return ConversationHistoryResponse(
+        session_id=conv.session_id,
+        messages=[
+            ConversationMessage(
+                role=m.role,
+                content=m.content,
+                patterns_used=m.patterns_used,
+                timestamp=m.timestamp,
+            )
+            for m in conv.messages
+        ],
+        created_at=conv.created_at,
+    )
+
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page():
+    """Interactive chat UI for conversations."""
+    library.load()
+    return templates.chat_page(pattern_count=len(library.patterns))
 
 
 # --- Entry point ---
