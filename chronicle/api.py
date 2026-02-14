@@ -483,6 +483,112 @@ async def get_perspective(request: PerspectiveRequest):
     )
 
 
+@app.get("/ask")
+async def ask_simple(
+    q: str = Query(..., description="Your question about the current situation"),
+    patterns: int = Query(5, ge=1, le=10, description="Max patterns to consider"),
+    api_key: Optional[str] = Query(None, description="Anthropic API key (BYOK)"),
+):
+    """
+    Simple GET endpoint for quick queries.
+    
+    Example: /ask?q=Is AI hype like the dotcom bubble?
+    
+    Returns plain text synthesis for easy consumption.
+    Requires API key via query param or ANTHROPIC_API_KEY env var.
+    """
+    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    
+    if not key:
+        raise HTTPException(
+            status_code=401, 
+            detail="API key required. Pass ?api_key=YOUR_KEY or set ANTHROPIC_API_KEY env var."
+        )
+    
+    engine = SynthesisEngine(api_key=key)
+    
+    try:
+        result = engine.generate_perspective(question=q, max_patterns=patterns)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # Return structured but simple response
+    return {
+        "question": result.question,
+        "synthesis": result.synthesis,
+        "confidence": result.confidence,
+        "patterns": [p.title for p in result.patterns_used],
+    }
+
+
+class UnprecedentedRequest(BaseModel):
+    """Request to check if something is truly unprecedented."""
+    claim: str
+    api_key: Optional[str] = None
+
+
+class UnprecedentedResponse(BaseModel):
+    """Response assessing whether something is unprecedented."""
+    claim: str
+    verdict: str  # "unprecedented", "has_precedent", or "partially_unprecedented"
+    precedents: list[str]  # Brief list of historical parallels
+    what_is_new: str  # What actually IS new about this situation
+    what_rhymes: str  # What rhymes with history
+    confidence: str
+
+
+@app.post("/unprecedented")
+async def check_unprecedented(request: UnprecedentedRequest):
+    """
+    The "Actually..." endpoint.
+    
+    When someone claims something is unprecedented, Chronicle checks history.
+    Returns a verdict on whether it really is unprecedented, and what the
+    historical parallels are.
+    
+    Great for grounding hyperbolic claims.
+    """
+    api_key = request.api_key or os.environ.get("ANTHROPIC_API_KEY")
+    
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="API key required. Pass api_key in body or set ANTHROPIC_API_KEY env var."
+        )
+    
+    # Reframe as a perspective question
+    question = f"Is this unprecedented: {request.claim}"
+    
+    engine = SynthesisEngine(api_key=api_key)
+    
+    try:
+        result = engine.generate_perspective(question=question, max_patterns=5)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # Parse the synthesis to extract verdict
+    synthesis_lower = result.synthesis.lower()
+    
+    if "unprecedented" in synthesis_lower and "not unprecedented" not in synthesis_lower:
+        if "partially" in synthesis_lower or "some aspects" in synthesis_lower:
+            verdict = "partially_unprecedented"
+        elif "truly unprecedented" in synthesis_lower or "genuinely unprecedented" in synthesis_lower:
+            verdict = "unprecedented"
+        else:
+            verdict = "has_precedent"
+    else:
+        verdict = "has_precedent"
+    
+    return UnprecedentedResponse(
+        claim=request.claim,
+        verdict=verdict,
+        precedents=[p.title for p in result.patterns_used],
+        what_is_new="See synthesis for details.",
+        what_rhymes="See synthesis for historical parallels.",
+        confidence=result.confidence,
+    )
+
+
 # --- Conversation Models ---
 
 class ConversationStartResponse(BaseModel):
