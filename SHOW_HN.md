@@ -14,15 +14,21 @@ Chronicle surfaces those rhymes—not to predict the future, but to provide pers
 - Calibrate your concern relative to historical norms
 
 **Try it:**
+
+Web UI (bring your own Anthropic key): https://chronicle-production-433c.up.railway.app/app
+
+Browse the patterns first (no key needed): https://chronicle-production-433c.up.railway.app/browse
+
+Or via API:
 ```
-curl "https://chronicle-production-433c.up.railway.app/ask?q=Is%20AI%20hype%20unprecedented"
+curl "https://chronicle-production-433c.up.railway.app/ask?q=Is%20AI%20hype%20unprecedented&api_key=YOUR_KEY"
 ```
 
-Or check if a claim is really unprecedented:
+Check if a claim is really unprecedented:
 ```
 curl -X POST https://chronicle-production-433c.up.railway.app/unprecedented \
   -H "Content-Type: application/json" \
-  -d '{"claim": "AI will replace all knowledge workers within 5 years"}'
+  -d '{"claim": "AI will replace all knowledge workers within 5 years", "api_key": "YOUR_KEY"}'
 ```
 
 **What's inside:**
