@@ -437,6 +437,33 @@ def app_page(pattern_count: int, domains: dict) -> str:
         <h1>What's on your mind?</h1>
         <p class="subtitle">Describe a situation you're facing, and Chronicle will find historical parallels.</p>
         
+        <div class="examples" style="margin-bottom: 1.5rem;">
+            <span style="color: var(--text-muted); font-size: 0.9rem;">Try: </span>
+            <button class="example-btn" onclick="setQuestion('Is AI going to take all the jobs?')">AI taking jobs</button>
+            <button class="example-btn" onclick="setQuestion('Is the current housing market a bubble about to pop?')">Housing bubble</button>
+            <button class="example-btn" onclick="setQuestion('Should I worry about AGI this decade?')">AGI timeline</button>
+            <button class="example-btn" onclick="setQuestion('Is remote work a permanent shift or a pandemic blip?')">Remote work</button>
+        </div>
+        
+        <style>
+            .example-btn {{
+                background: transparent;
+                border: 1px solid var(--border);
+                color: var(--text-secondary);
+                padding: 0.4rem 0.8rem;
+                border-radius: 16px;
+                font-size: 0.85rem;
+                cursor: pointer;
+                margin-right: 0.5rem;
+                margin-bottom: 0.5rem;
+                transition: all 0.2s;
+            }}
+            .example-btn:hover {{
+                border-color: var(--accent);
+                color: var(--accent);
+            }}
+        </style>
+        
         <div class="query-section">
             <input 
                 type="text" 
@@ -478,6 +505,11 @@ def app_page(pattern_count: int, domains: dict) -> str:
     
     <script>
         let foundPatterns = [];
+        
+        function setQuestion(q) {{
+            document.getElementById('question').value = q;
+            document.getElementById('question').focus();
+        }}
         
         async function search() {{
             const question = document.getElementById('question').value.trim();
