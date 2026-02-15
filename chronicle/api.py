@@ -5,7 +5,7 @@ Chronicle HTTP API - Simple REST endpoint for agents and applications.
 import os
 import markdown
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -323,8 +323,18 @@ async def health():
 
 
 @app.get("/patterns", response_model=list[SearchResult])
-async def list_patterns(domain: Optional[str] = None):
-    """List all available patterns."""
+async def list_patterns(
+    request: Request,
+    domain: Optional[str] = None,
+):
+    """List all available patterns. Redirects browsers to /browse."""
+    # If browser, redirect to human-friendly page
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept and "application/json" not in accept:
+        from fastapi.responses import RedirectResponse
+        url = "/browse" + (f"?domain={domain}" if domain else "")
+        return RedirectResponse(url=url, status_code=302)
+    
     library.load()
     
     if domain:
