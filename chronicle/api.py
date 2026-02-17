@@ -17,6 +17,21 @@ from .synthesis import SynthesisEngine, Perspective
 from .conversations import ConversationEngine, conversation_engine
 
 
+# --- Error Handling ---
+def sanitize_error(e: Exception) -> str:
+    """Sanitize error messages to avoid leaking internals."""
+    error_str = str(e).lower()
+    # Don't leak API key errors or internal details
+    if "api_key" in error_str or "api key" in error_str:
+        return "API configuration error. Please try again or use your own API key."
+    if "rate" in error_str and "limit" in error_str:
+        return "Rate limit exceeded. Please wait and try again."
+    if "timeout" in error_str:
+        return "Request timed out. Please try again."
+    # Generic error for anything else
+    return "An error occurred while processing your request. Please try again."
+
+
 # --- Demo Mode Rate Limiting ---
 # Simple in-memory rate limiter: 5 queries per IP per day
 DEMO_RATE_LIMIT = 5
@@ -666,7 +681,7 @@ async def get_perspective(request: PerspectiveRequest, http_request: Request):
             domains=request.domains,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
     
     return PerspectiveResponse(
         question=result.question,
@@ -754,7 +769,7 @@ async def ask_simple(
     try:
         result = engine.generate_perspective(question=q, max_patterns=patterns)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
     
     # Return structured but simple response
     response = {
@@ -816,7 +831,7 @@ async def check_unprecedented(request: UnprecedentedRequest):
     try:
         result = engine.generate_perspective(question=question, max_patterns=5)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
     
     # Parse the synthesis to extract verdict
     synthesis_lower = result.synthesis.lower()
@@ -914,7 +929,7 @@ async def send_conversation_message(session_id: str, request: ConversationMessag
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error(e))
     
     # Get patterns used in this response
     last_message = conv.messages[-1]
