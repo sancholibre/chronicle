@@ -438,12 +438,21 @@ def app_page(pattern_count: int, domains: dict) -> str:
         <p class="subtitle">Describe a situation you're facing, and Chronicle will find historical parallels.</p>
         
         <div class="examples" style="margin-bottom: 1.5rem;">
-            <span style="color: var(--text-muted); font-size: 0.9rem;">Try: </span>
-            <button class="example-btn" onclick="setQuestion('Is AI going to take all the jobs?')">AI taking jobs</button>
-            <button class="example-btn" onclick="setQuestion('Is the current housing market a bubble about to pop?')">Housing bubble</button>
-            <button class="example-btn" onclick="setQuestion('Should I worry about AGI this decade?')">AGI timeline</button>
-            <button class="example-btn" onclick="setQuestion('Is remote work a permanent shift or a pandemic blip?')">Remote work</button>
+            <span style="color: var(--text-muted); font-size: 0.9rem;">Try these (instant): </span>
+            <button class="example-btn cached-example" onclick="setQuestion('Is AI hype like the dotcom bubble?')">AI bubble?</button>
+            <button class="example-btn cached-example" onclick="setQuestion('Is this the most polarized America has ever been?')">Polarization</button>
+            <button class="example-btn cached-example" onclick="setQuestion('Will AI take all the jobs?')">AI & jobs</button>
         </div>
+        
+        <style>
+            .cached-example {{
+                border-color: var(--accent);
+                color: var(--accent);
+            }}
+            .cached-example:hover {{
+                background: rgba(243, 156, 18, 0.1);
+            }}
+        </style>
         
         <style>
             .example-btn {{
@@ -480,15 +489,19 @@ def app_page(pattern_count: int, domains: dict) -> str:
                 </button>
             </div>
             
+            <div class="demo-info" id="demoInfo" style="margin-top: 1rem; padding: 0.75rem 1rem; background: rgba(39, 174, 96, 0.1); border: 1px solid rgba(39, 174, 96, 0.3); border-radius: 8px; font-size: 0.9rem;">
+                ✨ <strong>Demo mode:</strong> Try it free! <span id="demoRemaining">5</span> queries remaining today.
+            </div>
+            
             <details class="api-key-section">
-                <summary>🔑 API Key for synthesis (optional)</summary>
+                <summary>🔑 Have your own API key? (unlimited queries)</summary>
                 <input 
                     type="password" 
                     id="apiKey" 
                     placeholder="sk-ant-... (Anthropic API key)"
                 >
                 <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">
-                    Synthesis requires an Anthropic API key. Your key is sent directly to Anthropic, not stored.
+                    Your key is sent directly to Anthropic, not stored.
                 </p>
             </details>
         </div>
@@ -570,12 +583,16 @@ def app_page(pattern_count: int, domains: dict) -> str:
             resultsDiv.innerHTML = '<div class="loading">Synthesizing perspective from historical patterns</div>' + existingResults;
             
             try {{
+                // Use demo mode if no API key provided
+                const useDemo = !apiKey;
+                
                 const res = await fetch('/perspective', {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify({{
                         question: question,
                         api_key: apiKey || undefined,
+                        demo: useDemo,
                         max_patterns: 5
                     }})
                 }});
@@ -618,6 +635,20 @@ def app_page(pattern_count: int, domains: dict) -> str:
                 html += '</div>';
                 
                 resultsDiv.innerHTML = html;
+                
+                // Update demo counter if in demo mode
+                if (useDemo && !data.cached) {{
+                    const counter = document.getElementById('demoRemaining');
+                    const current = parseInt(counter.textContent) || 5;
+                    counter.textContent = Math.max(0, current - 1);
+                    
+                    if (current <= 1) {{
+                        document.getElementById('demoInfo').innerHTML = 
+                            '⚠️ Demo queries used up for today. Add your own API key for unlimited access.';
+                        document.getElementById('demoInfo').style.borderColor = 'rgba(231, 76, 60, 0.3)';
+                        document.getElementById('demoInfo').style.background = 'rgba(231, 76, 60, 0.1)';
+                    }}
+                }}
                 
             }} catch (err) {{
                 // Remove loading, restore patterns

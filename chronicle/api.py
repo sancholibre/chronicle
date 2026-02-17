@@ -3,8 +3,10 @@ Chronicle HTTP API - Simple REST endpoint for agents and applications.
 """
 
 import os
+import time
 import markdown
 from typing import Optional
+from collections import defaultdict
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -13,6 +15,151 @@ from pydantic import BaseModel
 from .patterns import library
 from .synthesis import SynthesisEngine, Perspective
 from .conversations import ConversationEngine, conversation_engine
+
+
+# --- Demo Mode Rate Limiting ---
+# Simple in-memory rate limiter: 5 queries per IP per day
+DEMO_RATE_LIMIT = 5
+demo_usage: dict[str, list[float]] = defaultdict(list)
+
+def check_demo_rate_limit(ip: str) -> tuple[bool, int]:
+    """Check if IP can use demo mode. Returns (allowed, remaining)."""
+    now = time.time()
+    day_ago = now - 86400
+    
+    # Clean old entries
+    demo_usage[ip] = [t for t in demo_usage[ip] if t > day_ago]
+    
+    remaining = DEMO_RATE_LIMIT - len(demo_usage[ip])
+    return remaining > 0, max(0, remaining)
+
+def record_demo_usage(ip: str):
+    """Record a demo query for rate limiting."""
+    demo_usage[ip].append(time.time())
+
+
+# --- Pre-generated Examples ---
+DEMO_EXAMPLES = {
+    "Is AI hype like the dotcom bubble?": {
+        "synthesis": """**Historical Rhymes**
+
+The current AI moment echoes several historical technology cycles:
+
+1. **Internet Hype Cycles (1994-2000)**: Massive investment based on transformative potential, with valuations detached from current revenue. Many comparisons are apt—the "this changes everything" rhetoric, the flood of startups, the infrastructure buildout preceding clear use cases.
+
+2. **Computing Revolution (1950s-1980s)**: Early predictions ranged from "computers will only be useful for census data" to "artificial intelligence is 20 years away" (said repeatedly for 60 years). The technology was transformative, but timelines were wildly wrong.
+
+3. **Electrification (1880s-1920s)**: Took 40+ years from invention to widespread productivity gains. Factory owners initially just replaced steam engines with electric motors; the real gains came from redesigning workflows around electricity's flexibility.
+
+**What Actually Happened**
+
+In the dotcom crash, ~80% of internet companies failed, but the survivors (Amazon, Google, eBay) became among the most valuable companies in history. The technology thesis was correct; the valuations were premature. The Nasdaq took 15 years to recover its 2000 peak.
+
+**Calibration**
+
+The "bubble" framing may be too binary. Questions to consider:
+- Dotcom bubble: overvaluation of *applications* before infrastructure existed
+- AI today: infrastructure (compute, models) exists; applications are emerging
+- Key difference: AI companies like NVIDIA are profitable; many dotcom companies had no revenue
+
+Historical base rate: transformative technologies usually take 2-3x longer than predicted but go 10x further than imagined.
+
+**What's Different This Time**
+
+- AI produces working outputs immediately (generative AI), unlike early internet "portals"
+- Major tech companies are profitable and funding development, not VC-dependent startups
+- The technology is improving on a steep curve, not waiting for infrastructure buildout
+
+**Perspective Shift**
+
+Rather than "is this a bubble?", ask "what's the timeline mismatch?" The dotcom crash wasn't wrong about the internet—it was wrong about timing. If AI follows similar patterns, current valuations might be 5-10 years premature, but the directional bet could still be correct.""",
+        "confidence": "medium-high",
+        "patterns_used": ["internet-hype", "computing-revolution", "electrification"]
+    },
+    "Is this the most polarized America has ever been?": {
+        "synthesis": """**Historical Rhymes**
+
+American political polarization has several historical precedents that exceed current levels:
+
+1. **Civil War Era (1850s-1860s)**: Congressmen literally beat each other on the floor. Preston Brooks caned Charles Sumner nearly to death in the Senate chamber. The country then fought a war that killed 2% of the population.
+
+2. **Reconstruction and Redemption (1865-1877)**: Organized political violence, thousands of Black Americans murdered for voting, entire state governments overthrown by force.
+
+3. **1960s-1970s**: Political assassinations (JFK, RFK, MLK, Malcolm X), domestic terrorism (over 2,500 bombings in 1971-1972 alone), National Guard shooting students, cities burning.
+
+4. **1920s-1930s**: KKK had 4-6 million members, open Nazi rallies in Madison Square Garden, violent labor conflicts, Business Plot to overthrow FDR.
+
+**What Actually Happened**
+
+In each case, the country did not permanently fracture (with the temporary exception of the Civil War). Periods of extreme polarization were followed by periods of relative consensus—though often through suppression of legitimate grievances rather than resolution.
+
+**Calibration**
+
+Current polarization is historically notable but not unprecedented. Key metrics:
+- Political violence: significantly lower than 1960s-70s
+- Congressional bipartisanship: at historic lows since ~2010
+- Media environment: unprecedented fragmentation (genuinely new)
+- Geographic sorting: historically high
+
+You're likely experiencing recency bias amplified by social media's visibility of conflict.
+
+**What's Different This Time**
+
+- Information environment is genuinely unprecedented (algorithmic amplification, filter bubbles)
+- Decline of shared information sources (no more "Walter Cronkite moment")
+- Economic anxiety hitting demographics (white non-college) previously insulated from it
+- Both parties increasingly view the other as existential threat
+
+**Perspective Shift**
+
+The question isn't whether polarization is unprecedented (it isn't), but whether the *mechanisms* of polarization are new enough to produce different outcomes. The media environment is the wild card that doesn't have a clean historical parallel.""",
+        "confidence": "high",
+        "patterns_used": ["civil-rights-waves", "democracy-waves", "generational-conflicts"]
+    },
+    "Will AI take all the jobs?": {
+        "synthesis": """**Historical Rhymes**
+
+Technological unemployment fears have recurred with every major innovation:
+
+1. **Luddites (1811-1816)**: Textile workers destroyed machines, fearing permanent unemployment. Textile employment actually *increased* as lower prices expanded demand, though individual craftsmen were displaced.
+
+2. **Automation Anxiety (1950s-1960s)**: "Automation will create unemployment the likes of which we have never seen" (JFK, 1960). Instead, employment shifted to services; manufacturing output grew while manufacturing *employment share* fell.
+
+3. **ATMs and Bank Tellers**: Predicted to eliminate teller jobs. Instead, cheaper branch operation led to more branches, and tellers shifted to relationship/sales roles. Teller employment grew until 2000.
+
+4. **Agricultural Mechanization**: US farm employment fell from 40% (1900) to 2% (today). This was traumatic for individuals but occurred over generations, allowing adaptation.
+
+**What Actually Happened**
+
+Across 200+ years of technological disruption:
+- Short-term displacement is real and painful for affected workers
+- Long-term total employment has always recovered and grown
+- New job categories emerged that were unimaginable before (social media manager, data scientist, UX designer)
+- Transition periods vary from years to decades
+
+**Calibration**
+
+Historical base rate: technology destroys specific jobs while creating new categories. But:
+- Speed of transition matters enormously for human welfare
+- "Long run we're all fine" is cold comfort to a 55-year-old whose skills are obsolete
+- Some transitions were brutal (Great Depression was partly agricultural transition)
+
+The correct question isn't "will jobs exist?" but "how fast is the transition, and who bears the costs?"
+
+**What's Different This Time**
+
+- AI targets cognitive work, not just physical labor (historically safer)
+- Speed of capability improvement is faster than previous technologies
+- General-purpose nature means multiple job categories affected simultaneously
+- Unlike past automation, this might compete on "human" qualities (creativity, communication)
+
+**Perspective Shift**
+
+Rather than "jobs vs. no jobs," think about "tasks within jobs." Most jobs are bundles of tasks; AI will automate some tasks while changing which human tasks are valuable. The historical pattern suggests more jobs, but potentially very different jobs—and a transition period that policy choices will make either manageable or brutal.""",
+        "confidence": "medium",
+        "patterns_used": ["technological-unemployment-fears", "productivity-paradox", "labor-movements"]
+    }
+}
 from . import templates
 
 
@@ -24,6 +171,7 @@ class PerspectiveRequest(BaseModel):
     max_patterns: int = 5
     domains: Optional[list[str]] = None
     api_key: Optional[str] = None  # BYOK support
+    demo: bool = False  # Demo mode - rate limited, no key required
 
 
 class PatternSummary(BaseModel):
@@ -452,18 +600,61 @@ async def list_domains():
 
 
 @app.post("/perspective", response_model=PerspectiveResponse)
-async def get_perspective(request: PerspectiveRequest):
+async def get_perspective(request: PerspectiveRequest, http_request: Request):
     """
     Get historical perspective on a question.
     
     This is the main endpoint. Provide a question about your current situation,
     and Chronicle will find relevant historical patterns and synthesize perspective.
     
-    Requires API key - either set ANTHROPIC_API_KEY environment variable,
-    or pass api_key in the request body (BYOK).
+    Modes:
+    - BYOK: Pass your own api_key
+    - Demo: Set demo=true for rate-limited free access (5/day)
+    - Server: Uses ANTHROPIC_API_KEY env var if set
     """
-    # Use provided API key or fall back to environment
+    # Check for pre-generated example (instant response, no rate limit)
+    if request.question in DEMO_EXAMPLES:
+        ex = DEMO_EXAMPLES[request.question]
+        return PerspectiveResponse(
+            question=request.question,
+            synthesis=ex["synthesis"],
+            confidence=ex["confidence"],
+            caveats=["This is a pre-generated example response."],
+            patterns_used=[
+                PatternSummary(id=pid, title=pid.replace("-", " ").title(), domain="cached", era="")
+                for pid in ex["patterns_used"]
+            ],
+        )
+    
+    # Determine API key to use
     api_key = request.api_key or os.environ.get("ANTHROPIC_API_KEY")
+    
+    # If no user key and demo mode requested
+    if not request.api_key and request.demo:
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            raise HTTPException(
+                status_code=503,
+                detail="Demo mode unavailable - server not configured."
+            )
+        
+        # Rate limit check
+        client_ip = http_request.client.host if http_request.client else "unknown"
+        allowed, remaining = check_demo_rate_limit(client_ip)
+        
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail="Demo rate limit exceeded (5/day). Use your own API key for unlimited access."
+            )
+        
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        record_demo_usage(client_ip)
+    
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="API key required. Use demo=true for free trial, or provide your own api_key."
+        )
     
     # Create engine with appropriate key
     engine = SynthesisEngine(api_key=api_key)
@@ -496,9 +687,11 @@ async def get_perspective(request: PerspectiveRequest):
 
 @app.get("/ask")
 async def ask_simple(
+    request: Request,
     q: str = Query(..., description="Your question about the current situation"),
     patterns: int = Query(5, ge=1, le=10, description="Max patterns to consider"),
     api_key: Optional[str] = Query(None, description="Anthropic API key (BYOK)"),
+    demo: bool = Query(False, description="Use demo mode (rate limited, no key required)"),
 ):
     """
     Simple GET endpoint for quick queries.
@@ -506,14 +699,54 @@ async def ask_simple(
     Example: /ask?q=Is AI hype like the dotcom bubble?
     
     Returns plain text synthesis for easy consumption.
-    Requires API key via query param or ANTHROPIC_API_KEY env var.
+    
+    Modes:
+    - BYOK: Pass your own api_key
+    - Demo: Set demo=true for rate-limited free access (5/day)
+    - Server: Uses ANTHROPIC_API_KEY env var if set
     """
+    # Check for pre-generated example (instant response, no rate limit)
+    if q in DEMO_EXAMPLES:
+        ex = DEMO_EXAMPLES[q]
+        return {
+            "question": q,
+            "synthesis": ex["synthesis"],
+            "confidence": ex["confidence"],
+            "patterns": ex["patterns_used"],
+            "demo_mode": True,
+            "cached": True,
+        }
+    
+    # Determine API key to use
     key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    is_demo_mode = False
+    
+    # If no user key, check demo mode
+    if not api_key and demo:
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            raise HTTPException(
+                status_code=503,
+                detail="Demo mode unavailable - server not configured."
+            )
+        
+        # Rate limit check
+        client_ip = request.client.host if request.client else "unknown"
+        allowed, remaining = check_demo_rate_limit(client_ip)
+        
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Demo rate limit exceeded. Try again tomorrow or use your own API key."
+            )
+        
+        key = os.environ.get("ANTHROPIC_API_KEY")
+        is_demo_mode = True
+        record_demo_usage(client_ip)
     
     if not key:
         raise HTTPException(
             status_code=401, 
-            detail="API key required. Pass ?api_key=YOUR_KEY or set ANTHROPIC_API_KEY env var."
+            detail="API key required. Pass ?api_key=YOUR_KEY, use demo=true for free trial, or set ANTHROPIC_API_KEY env var."
         )
     
     engine = SynthesisEngine(api_key=key)
@@ -524,12 +757,20 @@ async def ask_simple(
         raise HTTPException(status_code=500, detail=str(e))
     
     # Return structured but simple response
-    return {
+    response = {
         "question": result.question,
         "synthesis": result.synthesis,
         "confidence": result.confidence,
         "patterns": [p.title for p in result.patterns_used],
     }
+    
+    if is_demo_mode:
+        client_ip = request.client.host if request.client else "unknown"
+        _, remaining = check_demo_rate_limit(client_ip)
+        response["demo_mode"] = True
+        response["demo_queries_remaining"] = remaining
+    
+    return response
 
 
 class UnprecedentedRequest(BaseModel):
